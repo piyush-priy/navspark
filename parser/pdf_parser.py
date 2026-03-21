@@ -30,21 +30,27 @@ def extract_text_ocr_images(images, page_index):
 
     return clean_text(text)
 
+def is_garbage(text):
+    return "(cid:" in text or len(text.strip()) < 20
 
 def hybrid_extract(pdf_path):
     pages = extract_text_pdfplumber(pdf_path)
-
-    # Convert once (important optimization)
     images = convert_from_path(pdf_path)
 
     final_pages = []
 
     for i, page in enumerate(pages):
-        if page["text"]:
+        text = page["text"]
+
+        if text and not is_garbage(text):
             final_pages.append(page)
         else:
-            print(f"[INFO] OCR fallback for page {page['page']}")
+            print(f"[INFO] Using OCR for page {page['page']}")
             ocr_text = extract_text_ocr_images(images, i)
-            final_pages.append({"page": page["page"], "text": ocr_text})
+
+            final_pages.append({
+                "page": page["page"],
+                "text": ocr_text
+            })
 
     return final_pages

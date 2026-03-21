@@ -8,7 +8,7 @@ pages = hybrid_extract(pdf_path)
 
 # Save output (VERY IMPORTANT)
 with open("output/parsed_pages.json", "w", encoding="utf-8") as f:
-    json.dump(pages, f, indent=2)
+    json.dump(pages, f, indent=2, ensure_ascii=False)
 
 # Print preview
 for p in pages[:3]:

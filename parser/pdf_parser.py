@@ -9,13 +9,20 @@ def clean_text(text):
     return text.replace("\n", " ").strip()
 
 
+def is_garbage(text):
+    return "(cid:" in text or len(text.strip()) < 20
+
+
 def extract_text_pdfplumber(pdf_path):
     pages_text = []
 
     with pdfplumber.open(pdf_path) as pdf:
         for i, page in enumerate(pdf.pages):
             text = page.extract_text()
-            pages_text.append({"page": i + 1, "text": clean_text(text)})
+            pages_text.append({
+                "page": i + 1,
+                "text": clean_text(text)
+            })
 
     return pages_text
 
@@ -25,13 +32,11 @@ def extract_text_ocr_images(images, page_index):
 
     text = pytesseract.image_to_string(
         img,
-        lang="eng+hin+guj",
+        lang="eng+hin+guj"
     )
 
     return clean_text(text)
 
-def is_garbage(text):
-    return "(cid:" in text or len(text.strip()) < 20
 
 def hybrid_extract(pdf_path):
     pages = extract_text_pdfplumber(pdf_path)

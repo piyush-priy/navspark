@@ -25,4 +25,5 @@ dist/
 *.egg-info/
 
 # Project outputs
+data/
 output/

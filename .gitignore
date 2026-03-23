@@ -27,3 +27,4 @@ dist/
 # Project outputs
 data/
 output/
+logs/

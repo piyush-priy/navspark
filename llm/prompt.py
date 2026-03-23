@@ -12,8 +12,8 @@ def build_prompt(text, doc_type):
 """
         doc_guidance = """
 eChallan hints:
-- `vehicle_number` should be normalized to a compact plate-like token.
-- `challan_number` may contain OCR confusions between O/0, I/1, S/5.
+- `vehicle_number` should be normalized to a compact plate-like token in format XX00XX0000 (e.g., DL01AB1234).
+- `challan_number` may contain OCR confusions between O/0, I/1, S/5, also there may be accidental blank spaces in between which should not be there. Remove any accidental spaces, line breaks, or separators present due to OCR/parsing errors.
 """
 
     elif doc_type == "lease":

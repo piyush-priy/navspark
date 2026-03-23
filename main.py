@@ -15,8 +15,8 @@ def run_pipeline(pdf_path):
     # Step 1: Extract text
     pages = hybrid_extract(pdf_path)
 
-    # Save raw output (debugging)
-    with open("output/parsed_pages.json", "w", encoding="utf-8") as f:
+    # Save raw output for debugging
+    with open("output/parsed_pages_raw.json", "w", encoding="utf-8") as f:
         json.dump(pages, f, indent=2, ensure_ascii=False)
 
     # Step 2: Detect document type
@@ -25,6 +25,10 @@ def run_pipeline(pdf_path):
 
     # Step 2: Filter relevant pages
     relevant_pages = filter_pages(pages, doc_type)
+
+    # Save final filtered output (used for downstream processing)
+    with open("output/parsed_pages.json", "w", encoding="utf-8") as f:
+        json.dump(relevant_pages, f, indent=2, ensure_ascii=False)
 
     print("\n[INFO] Relevant Pages:")
     for p in relevant_pages:
@@ -81,4 +85,4 @@ def run_pipeline(pdf_path):
 
 
 if __name__ == "__main__":
-    run_pipeline("data/255 FINAL ORDER.pdf")
+    run_pipeline("data/e2.pdf")

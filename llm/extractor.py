@@ -260,15 +260,18 @@ def extract_structured_data(text, doc_type):
         f"(limit={max_request_tokens})"
     )
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        max_tokens=max_completion_tokens,
-    )
-
-    raw_output = response.choices[0].message.content
-    raw_output = clean_json(raw_output)
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=max_completion_tokens,
+        )
+        raw_output = response.choices[0].message.content
+        raw_output = clean_json(raw_output)
+    except Exception as e:
+        print(f"[WARN] LLM API Call failed (Rate Limit or Error): {e}")
+        return None, prompt, ""
 
     schema = get_schema(doc_type)
 

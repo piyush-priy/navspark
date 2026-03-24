@@ -126,6 +126,7 @@ def process_single_pdf(pdf_path, save_debug=False):
         _write_json(f"output/{base}_parsed_pages.json", relevant_pages)
 
     # Deterministic NA order extraction: all fields are on page 1 in a rigid template.
+    deterministic_records = []
     if doc_type == "na_order":
         merged_text = "\n".join(p["text"] for p in relevant_pages if p["text"].strip())
         na_record = extract_na_record_from_text(merged_text)
@@ -144,14 +145,9 @@ def process_single_pdf(pdf_path, save_debug=False):
 
         if has_core:
             print(f"[SUCCESS] Deterministic NA extraction: {na_record}")
-            return {
-                "file": pdf_path,
-                "doc_type": doc_type,
-                "records": [na_record],
-                "llm_inputs": [],
-                "relevant_pages": [p["page"] for p in relevant_pages],
-            }
-        print("[WARN] Deterministic NA extraction failed, falling back to LLM")
+            deterministic_records = [na_record]
+        else:
+            print("[WARN] Deterministic NA extraction failed, relying purely on LLM")
 
     # Deterministic lease extraction: classify pages and extract key fields directly.
     if doc_type == "lease":
@@ -178,13 +174,10 @@ def process_single_pdf(pdf_path, save_debug=False):
         )
 
         if has_core_values:
-            return {
-                "file": pdf_path,
-                "doc_type": doc_type,
-                "records": [lease_record],
-                "llm_inputs": [],
-                "relevant_pages": [p["page"] for p in relevant_pages],
-            }
+            print(f"[SUCCESS] Deterministic Lease extraction: {lease_record}")
+            deterministic_records = [lease_record]
+        else:
+            print("[WARN] Deterministic Lease extraction failed, relying purely on LLM")
 
     # For docs where deterministic extraction failed, prepare LLM text payloads.
     llm_inputs = []
@@ -205,6 +198,7 @@ def process_single_pdf(pdf_path, save_debug=False):
         "file": pdf_path,
         "doc_type": doc_type,
         "records": [],
+        "deterministic_records": deterministic_records,
         "llm_inputs": llm_inputs,
         "relevant_pages": [p["page"] for p in relevant_pages],
     }
@@ -234,12 +228,27 @@ def run_llm_final_step(processed_docs):
                 continue
 
             if data:
-                results.append(data)
+                # Merge LLM output base with Deterministic highly-accurate overrides
+                merged_data = data
+                d_records = doc.get("deterministic_records") or []
+                if d_records:
+                    d_rec = d_records[0]
+                    for key, val in d_rec.items():
+                        # Override LLM values ONLY if the deterministic parser found a non-null, valid value
+                        if val is not None and not str(key).startswith("_"):
+                            merged_data[key] = val
+                            
+                results.append(merged_data)
                 print(f"[SUCCESS] Extracted payload: {page_marker}")
             else:
                 print(f"[FAILED] Extracted payload: {page_marker}")
 
             log_llm(prompt, response, doc_type, page_marker)
+
+        # If LLM failed completely/rate-limited, fallback directly to deterministic core data
+        if not results and doc.get("deterministic_records"):
+            print(f"[WARN] LLM extraction returned no results. Falling back to deterministic.")
+            results = doc.get("deterministic_records")
 
         doc["records"] = results
 

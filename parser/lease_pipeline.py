@@ -90,6 +90,9 @@ def classify_page(text):
 		or "registration no" in normalized
 		or "document no" in normalized
 		or "doc no" in normalized
+		or "receipt no" in normalized
+		or "serial no" in normalized
+		or "sub registrar" in normalized
 	):
 		return "registration"
 
@@ -254,20 +257,41 @@ def extract_lease_record_from_pages(pages, all_pages=None):
 	lease_area = (annexure_areas or property_areas or any_areas or [None])[0]
 
 	execution_date = None
-	# The lease execution date appears as "Date: DD-MM-YYYY" in the footer
-	# of every page.  Search ALL raw pages (not just filtered) because the
-	# filtered subset may have garbled OCR on the footer.
-	search_pages = (all_pages or []) + [p for p in classified]
-	for page in search_pages:
-		text = page.get("text") or ""
-		m = re.search(
-			r"date\s*[:\-]\s*(\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{2,4})",
-			text,
-			flags=re.IGNORECASE,
-		)
-		if m:
-			execution_date = _normalize_date(m.group(1))
-			if execution_date:
+	# 1. First prioritize the official Registration page or E-Challan (usually Page 51 or Page 1)
+	# These pages have large, stamped dates that OCR perfectly, avoiding the '5' vs '8' tiny footer issue.
+	for page in page_groups["registration"]:
+		dates = _all_dates(page.get("text") or "")
+		recent_dates = [d for d in dates if 2000 < int(d.split("/")[-1]) <= 2030]
+		if recent_dates:
+			execution_date = recent_dates[0]
+			break
+
+	# 2. If no registration page found, fallback to explicit footer "Date: DD-MM-YYYY"
+	if not execution_date:
+		# of every page.  Search ALL raw pages (not just filtered) because the
+		# filtered subset may have garbled OCR on the footer.
+		search_pages = (all_pages or []) + [p for p in classified]
+		for page in search_pages:
+			text = page.get("text") or ""
+			m = re.search(
+				r"date\s*[:\-]\s*(\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{4})",
+				text,
+				flags=re.IGNORECASE,
+			)
+			if m:
+				raw_match = m.group(1)
+				execution_date = _normalize_date(raw_match)
+				if execution_date:
+					break
+
+	# 3. Last Fallback: If no explicit footer found, search all raw pages for ANY recent date
+	# This catches dates on E-Challan pages (page 1) which might be classified as 'other'
+	if not execution_date:
+		for page in search_pages:
+			dates = _all_dates(page.get("text") or "")
+			recent_dates = [d for d in dates if 2000 < int(d.split("/")[-1]) <= 2030]
+			if recent_dates:
+				execution_date = recent_dates[0]
 				break
 
 	term_blob = "\n".join(page["text"] for page in page_groups["term"])

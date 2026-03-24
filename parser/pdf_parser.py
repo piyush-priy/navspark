@@ -1,6 +1,8 @@
 import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
+import cv2
+import numpy as np
 
 
 def clean_text(text):
@@ -46,12 +48,39 @@ def extract_text_pdfplumber(pdf_path, page_numbers=None, max_pages=None):
     return pages_text
 
 
+def preprocess_image_for_ocr(img):
+    """Enhance image for OCR using OpenCV (resizing, grayscale, thresholding)."""
+    # Convert PIL Image to OpenCV format (numpy array)
+    cv_img = np.array(img)
+    # Convert RGB to BGR if necessary
+    if len(cv_img.shape) == 3 and cv_img.shape[2] == 3:
+        cv_img = cv_img[:, :, ::-1].copy()
+    
+    # 1. Resize image to 2.0x to improve small text recognition (like footers)
+    # INTER_LANCZOS4 is sharper than CUBIC, preventing loops in '5' from blurring into '8'
+    width = int(cv_img.shape[1] * 2.0)
+    height = int(cv_img.shape[0] * 2.0)
+    cv_img = cv2.resize(cv_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
+    
+    # 2. Convert to grayscale
+    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+    
+    # We remove explicit Otsu thresholding because Tesseract's internal adaptive
+    # thresholding (Leptonica) is much better at keeping small features like the gap in '5'
+    # open across different page lighting conditions.
+    
+    return gray
+
+
 def extract_text_ocr_images(images, page_index):
     img = images[page_index]
+    
+    # Preprocess the image to improve text clarity, especially for small dates
+    preprocessed_img = preprocess_image_for_ocr(img)
 
     # Multi-language segmentation modes
     text_psm3 = pytesseract.image_to_string(
-        img,
+        preprocessed_img,
         lang="eng+hin+guj",
         config="--psm 3"
     )

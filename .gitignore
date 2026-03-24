@@ -28,3 +28,7 @@ dist/
 data/
 output/
 logs/
+
+
+test_dates.py
+test_lease_dates.py

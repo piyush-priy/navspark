@@ -242,7 +242,18 @@ def _is_relevant_page(cleaned_text, doc_type):
 def filter_pages(pages, doc_type):
     relevant = []
 
+    # Business rule: for target pipeline we only process fixed pages for these docs.
+    if doc_type == "na_order":
+        target_pages = {1}
+    elif doc_type == "lease":
+        target_pages = {3, 4}
+    else:
+        target_pages = None
+
     for p in pages:
+        if target_pages is not None and p["page"] not in target_pages:
+            continue
+
         text = p["text"]
         
         # Clean the text based on document type to remove irrelevant boilerplate
@@ -278,7 +289,16 @@ def filter_pages(pages, doc_type):
 
     # Safety fallback: if everything gets filtered out, keep the first cleaned page.
     if not relevant and pages:
-        first = pages[0]
+        if doc_type == "lease":
+            # Prefer page 3/4 fallback for lease as requested.
+            lease_fallback = [p for p in pages if p["page"] in {3, 4}]
+            if lease_fallback:
+                first = lease_fallback[0]
+            else:
+                first = pages[0]
+        else:
+            first = pages[0]
+
         relevant.append({"page": first["page"], "text": clean_irrelevant_lines(first["text"], doc_type)})
 
     return relevant

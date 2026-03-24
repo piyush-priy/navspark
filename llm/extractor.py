@@ -2,6 +2,7 @@ import json
 import os
 import re
 from groq import Groq
+from groq import GroqError
 
 from schemas.echallan import EChallan
 from schemas.lease import LeaseRecord
@@ -9,7 +10,25 @@ from schemas.na_order import NAOrder
 
 from llm.prompt import build_prompt
 
-client = Groq()
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is not None:
+        return _client
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is missing. Set it in your environment or .env file before running extraction."
+        )
+
+    try:
+        _client = Groq(api_key=api_key)
+        return _client
+    except GroqError as exc:
+        raise RuntimeError(f"Failed to initialize Groq client: {exc}") from exc
 
 
 def _approx_tokens(text):
@@ -182,7 +201,35 @@ def _postprocess_echallan_data(data, source_text):
     return data
 
 
+def _postprocess_lease_data(data):
+    if not isinstance(data, dict):
+        return data
+
+    # Backward-compatible key mapping if model returns older field names.
+    if not data.get("lease_area") and data.get("land_area"):
+        data["lease_area"] = data.get("land_area")
+    if not data.get("lease_start") and data.get("lease_start_date"):
+        data["lease_start"] = data.get("lease_start_date")
+
+    return data
+
+
+def _postprocess_na_order_data(data):
+    if not isinstance(data, dict):
+        return data
+
+    # Backward-compatible key mapping if model returns older field names.
+    if not data.get("area_in_na_order") and data.get("land_area"):
+        data["area_in_na_order"] = data.get("land_area")
+    if not data.get("dated") and data.get("order_date"):
+        data["dated"] = data.get("order_date")
+
+    return data
+
+
 def extract_structured_data(text, doc_type):
+    client = _get_client()
+
     requested_budget = int(os.getenv("MAX_REQUEST_TOKENS", "3500"))
     max_request_tokens = min(requested_budget, 12000)
     reserve_output_tokens = int(os.getenv("RESERVE_OUTPUT_TOKENS", "1000"))
@@ -223,6 +270,10 @@ def extract_structured_data(text, doc_type):
 
         if doc_type == "echallan":
             data = _postprocess_echallan_data(data, compacted_text)
+        elif doc_type == "lease":
+            data = _postprocess_lease_data(data)
+        elif doc_type == "na_order":
+            data = _postprocess_na_order_data(data)
 
         # Convert all non-None values to string to satisfy Pydantic strict string fields
         for k, v in data.items():
@@ -263,6 +314,10 @@ Output:
 
             if doc_type == "echallan":
                 data = _postprocess_echallan_data(data, compacted_text)
+            elif doc_type == "lease":
+                data = _postprocess_lease_data(data)
+            elif doc_type == "na_order":
+                data = _postprocess_na_order_data(data)
 
             for k, v in data.items():
                 if v is not None:

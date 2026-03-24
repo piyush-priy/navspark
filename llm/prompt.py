@@ -1,75 +1,59 @@
 def build_prompt(text, doc_type):
     doc_guidance = ""
 
-    if doc_type == "echallan":
-        fields = """
-- challan_number
-- vehicle_number
-- violation_date
-- amount
-- offence_description
-- payment_status
-"""
-        doc_guidance = """
-eChallan hints:
-- `vehicle_number` should be normalized to a compact plate-like token in format XX00XX0000 (e.g., DL01AB1234).
-- `challan_number` may contain OCR confusions between O/0, I/1, S/5, also there may be accidental blank spaces in between which should not be there. Remove any accidental spaces, line breaks, or separators present due to OCR/parsing errors.
-"""
-
-    elif doc_type == "lease":
+    if doc_type == "lease":
         fields = """
 - survey_number
-    - lease_deed_doc_no
-    - lease_area
-    - lease_start
+- village
+- lease_area
+- lease_start_date
+- lease_deed_doc_no
 """
         doc_guidance = """
 Lease-specific hints:
-- `survey_number` may appear as: survey no, survey number, block number, સરવે નંબર, બ્લોક નંબર.
-    - `lease_deed_doc_no` may appear as document no, registration no, deed no, દાખલા ક્રમાંક.
-    - `lease_area` may appear as: area, extent, sq.m, hectare, acre, ચો.મી, ક્ષેત્રફળ.
-    - `lease_start` may be execution/registration/effective/commencement date.
+- `survey_number` may appear as: survey no, block number, સરવે નંબર, બ્લોક નંબર.
+- `village` may appear as ગામ, Village, Moje, or Mouje.
+- `lease_area` may appear as: area, extent, sq.m, hectare, acre, ચો.મી, ક્ષેત્રફળ.
+- `lease_start_date` may be execution/registration/effective date.
+- `lease_deed_doc_no` may appear as Document No, Doc No, દસ્તાવેજ નં, or Registration Number.
 """
 
     elif doc_type == "na_order":
         fields = """
 - survey_number
-    - village
-    - area_in_na_order
-    - dated
-    - na_order_no
+- village
+- na_area
+- order_date
+- na_order_no
 """
         doc_guidance = """
 NA-order-specific hints:
 - `survey_number` may appear as સરવે/બ્લોક નંબર or survey/block number.
-    - `village` may appear as ગામ, mouje, village.
-    - `area_in_na_order` may appear as ક્ષેત્રફળ, ચો.મી, sq.m, area.
-    - `dated` is usually near હુકમ નં./પ્રાંત કચેરી/તા.
-    - `na_order_no` may appear as હુકમ નં., order no, file no.
+- `village` may appear as ગામ, Village, Moje, or Mouje.
+- `na_area` is the TOTAL survey area (વિસ્તાર), NOT the leased subset (ક્ષેત્રફળ). Look for the number after વિસ્તાર. For example in "વિસ્તાર 5,997.00 ચો.મી. પૈકી ક્ષેત્રફળ 4,047.00 ચો.મી.", na_area = 5997.
+- `order_date` is usually near હુકમ નં./પ્રાંત કચેરી/તા.
+- `na_order_no` may appear as Order No, હુકમ નં, જમીન/વશી/..., or Case Number.
 """
-
     else:
         fields = ""
 
-    return f"""
-You are an expert document parser.
+    return f"""Extract structured data from OCR text.
 
-The document may contain multiple languages (English, Gujarati, Hindi).
-You WILL see OCR errors. Fix obvious OCR confusions (O/0, I/1, S/5) only when context is clear.
-Never truncate long string values.
-
-Extract the following fields:
-
+Rules:
+- Text may be English/Gujarati/Hindi.
+- Correct only obvious OCR confusions (O/0, I/1, S/5) when context is clear.
+- Return ONLY one JSON object.
+- Include exactly these fields:
 {fields}
-
-Return ONLY valid JSON.
-If a field is missing, return null.
-Do not invent values.
+- Missing values must be null.
+- Do not invent values.
+- For `village`, always transliterate to English (e.g., રામપુરા મોટા → Rampura Mota).
+- For area fields (`na_area`, `lease_area`), return ONLY the numeric value in sq.m without units or commas (e.g., 16534 not "16,534.00 ચો.મી.").
 
 {doc_guidance}
 
-Document:
-\"\"\"
+OCR text:
+<<<TEXT>>>
 {text}
-\"\"\"
+<<<END_TEXT>>>
 """

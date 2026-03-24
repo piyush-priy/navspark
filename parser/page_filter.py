@@ -26,33 +26,29 @@ def _keep_keywords(doc_type):
         return [
             "lease",
             "lease deed",
-            "lessor",
-            "lessee",
-            "owner",
-            "company",
             "survey",
             "block",
             "area",
             "hectare",
             "sq",
             "acre",
-            "duration",
-            "year",
-            "month",
-            "agreement",
-            "rent",
-            "amount",
-            "execute",
             "સરવે",
             "બ્લોક",
-            "લીઝ",
-            "ભાડા",
-            "માલિક",
             "ક્ષેત્રફળ",
-            "વર્ષ",
-            "માસ",
-            "કંપની",
-            "અરજદાર",
+            "village",
+            "moje",
+            "mouje",
+            "ગામ",
+            "doc",
+            "document",
+            "registration",
+            "દસ્તાવેજ",
+            "commencing",
+            "effective",
+            "execution",
+            "date",
+            "તા.",
+            "તારીખ",
         ]
 
     if doc_type == "na_order":
@@ -64,33 +60,19 @@ def _keep_keywords(doc_type):
             "ક્ષેત્રફળ",
             "ચો.મી",
             "જમીન",
-            "અરજદાર",
-            "અધિકૃત",
-            "કંપની",
             "તા.",
             "તારીખ",
-            "વર્ષ",
-            "માસ",
-            "દિવસ",
             "survey",
             "block",
             "area",
-            "company",
             "order",
             "date",
-            "year",
-            "month",
-            "day",
-        ]
-
-    if doc_type == "echallan":
-        return [
-            "challan",
-            "vehicle",
-            "violation",
-            "amount",
-            "offence",
-            "payment",
+            "village",
+            "moje",
+            "mouje",
+            "ગામ",
+            "case",
+            "વશી",
         ]
 
     return []
@@ -204,37 +186,53 @@ def _is_relevant_page(cleaned_text, doc_type):
 
     if doc_type == "na_order":
         strong = [
-            "હુકમ નં", "સરવે", "સર્વે", "બ્લોક", "ક્ષેત્રફળ", "ચો.મી",
-            "survey", "block", "area", "order no"
+            "હુકમ નં",
+            "સરવે",
+            "સર્વે",
+            "બ્લોક",
+            "ક્ષેત્રફળ",
+            "ચો.મી",
+            "survey",
+            "block",
+            "area",
+            "order no",
         ]
-        weak = [
-            "અરજદાર", "અધિકૃત", "company", "limited", "તા.", "date", "પ્રાંત કચેરી"
-        ]
+        weak = ["તા.", "date", "પ્રાંત કચેરી", "village", "ગામ", "moje", "mouje"]
         strong_hits = _keyword_count(cleaned_text, strong)
         weak_hits = _keyword_count(cleaned_text, weak)
         return strong_hits >= 2 or (strong_hits >= 1 and weak_hits >= 2)
 
     if doc_type == "lease":
         strong = [
-            "survey", "block", "area", "hectare", "acre", "lessor", "lessee",
-            "owner", "duration", "rent", "સરવે", "બ્લોક", "ક્ષેત્રફળ", "લીઝ", "માલિક"
+            "survey",
+            "block",
+            "area",
+            "hectare",
+            "acre",
+            "સરવે",
+            "બ્લોક",
+            "ક્ષેત્રફળ",
+            "village",
+            "ગામ",
+            "moje",
+            "mouje",
+            "book no",
+            "registered no",
+            "registration no",
+            "document no",
         ]
-        weak = ["company", "limited", "agreement", "year", "month", "વર્ષ", "માસ"]
+        weak = [
+            "doc no",
+            "document",
+            "દસ્તાવેજ",
+            "registration",
+            "date",
+            "commencing",
+            "effective",
+        ]
         strong_hits = _keyword_count(cleaned_text, strong)
         weak_hits = _keyword_count(cleaned_text, weak)
         return strong_hits >= 2 or (strong_hits >= 1 and weak_hits >= 2)
-
-    if doc_type == "echallan":
-        strong = [
-            "challan", "challan no", "vehicle", "vehicle no", "violation",
-            "offence", "amount", "payment", "date", "time"
-        ]
-        strong_hits = _keyword_count(cleaned_text, strong)
-        has_date_pattern = bool(
-            re.search(r"\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{2,4}\b", cleaned_text)
-        )
-        # Accept if core challan signals exist, or one signal plus an actual date pattern.
-        return strong_hits >= 2 or (strong_hits >= 1 and has_date_pattern)
 
     return True
 
@@ -246,7 +244,7 @@ def filter_pages(pages, doc_type):
     if doc_type == "na_order":
         target_pages = {1}
     elif doc_type == "lease":
-        target_pages = {3, 4}
+        target_pages = {1, 3, 4, 10, 35, 51}
     else:
         target_pages = None
 
@@ -255,27 +253,17 @@ def filter_pages(pages, doc_type):
             continue
 
         text = p["text"]
-        
+
         # Clean the text based on document type to remove irrelevant boilerplate
         cleaned_text = clean_irrelevant_lines(text, doc_type)
 
         if not _is_relevant_page(cleaned_text, doc_type):
             continue
 
-        if doc_type == "echallan":
-            if "challan" in text.lower():
-                relevant.append({"page": p["page"], "text": cleaned_text})
-
-        elif doc_type == "lease":
-            if (
-                "survey" in text.lower()
-                or "₹" in text
-                or "amount" in text.lower()
-                or "lessee" in text.lower()
-                or "lease" in text.lower()
-                or "લીઝ" in text
-                or "સરવે" in text
-            ):
+        if doc_type == "lease":
+            # The lease flow already uses fixed target pages. Keep pages that pass
+            # cleaned-text relevance checks to reduce noisy payload.
+            if cleaned_text.strip():
                 relevant.append({"page": p["page"], "text": cleaned_text})
 
         elif doc_type == "na_order":
@@ -290,8 +278,8 @@ def filter_pages(pages, doc_type):
     # Safety fallback: if everything gets filtered out, keep the first cleaned page.
     if not relevant and pages:
         if doc_type == "lease":
-            # Prefer page 3/4 fallback for lease as requested.
-            lease_fallback = [p for p in pages if p["page"] in {3, 4}]
+            # Prefer fixed lease pages fallback as requested.
+            lease_fallback = [p for p in pages if p["page"] in {1, 3, 4, 10, 35, 51}]
             if lease_fallback:
                 first = lease_fallback[0]
             else:
@@ -299,6 +287,11 @@ def filter_pages(pages, doc_type):
         else:
             first = pages[0]
 
-        relevant.append({"page": first["page"], "text": clean_irrelevant_lines(first["text"], doc_type)})
+        relevant.append(
+            {
+                "page": first["page"],
+                "text": clean_irrelevant_lines(first["text"], doc_type),
+            }
+        )
 
     return relevant

@@ -1,10 +1,8 @@
 import json
 import os
-import re
 from groq import Groq
 from groq import GroqError
 
-from schemas.echallan import EChallan
 from schemas.lease import LeaseRecord
 from schemas.na_order import NAOrder
 
@@ -36,20 +34,64 @@ def _approx_tokens(text):
     return max(1, len(text) // 4)
 
 
+def _doc_char_budget(doc_type):
+    # Keep per-document budgets tight by default and configurable via env.
+    default_map = {
+        "na_order": 1000,
+        "lease": 1200,
+    }
+    env_name = f"MAX_INPUT_CHARS_{str(doc_type).upper()}"
+    configured = os.getenv(env_name)
+    if configured and configured.isdigit():
+        return max(400, int(configured))
+    return default_map.get(doc_type, 1200)
+
+
 def _keyword_set(doc_type):
     if doc_type == "lease":
         return {
-            "lease", "lessor", "lessee", "survey", "block", "area", "duration", "year",
-            "month", "company", "owner", "amount", "સરવે", "બ્લોક", "લીઝ", "ક્ષેત્રફળ",
-            "વર્ષ", "માસ", "અરજદાર", "કંપની"
+            "village",
+            "moje",
+            "mouje",
+            "ગામ",
+            "doc",
+            "document",
+            "દસ્તાવેજ",
+            "registration",
+            "lease",
+            "survey",
+            "block",
+            "area",
+            "સરવે",
+            "બ્લોક",
+            "ક્ષેત્રફળ",
+            "date",
+            "commencing",
+            "effective",
         }
     if doc_type == "na_order":
         return {
-            "હુકમ", "પરિશિષ્ટ", "સરવે", "બ્લોક", "ક્ષેત્રફળ", "ચો.મી", "અરજદાર",
-            "કંપની", "તા.", "survey", "block", "area", "order", "date", "year", "month"
+            "village",
+            "moje",
+            "mouje",
+            "ગામ",
+            "case",
+            "order no",
+            "વશી",
+            "જમીન",
+            "હુકમ",
+            "પરિશિષ્ટ",
+            "સરવે",
+            "બ્લોક",
+            "ક્ષેત્રફળ",
+            "ચો.મી",
+            "તા.",
+            "survey",
+            "block",
+            "area",
+            "order",
+            "date",
         }
-    if doc_type == "echallan":
-        return {"challan", "vehicle", "violation", "amount", "offence", "payment"}
     return set()
 
 
@@ -74,7 +116,9 @@ def _compact_text_to_budget(text, doc_type, max_chars):
         return text[:max_chars]
 
     keywords = _keyword_set(doc_type)
-    indexed_scored = [(idx, line, _line_score(line, keywords)) for idx, line in enumerate(lines)]
+    indexed_scored = [
+        (idx, line, _line_score(line, keywords)) for idx, line in enumerate(lines)
+    ]
     indexed_scored.sort(key=lambda x: x[2], reverse=True)
 
     selected_idx = set()
@@ -109,10 +153,20 @@ def _compact_text_to_budget(text, doc_type, max_chars):
     return compacted
 
 
+def _has_min_signal(text, doc_type):
+    compact = (text or "").strip()
+    if len(compact) < 40:
+        return False
+
+    keywords = _keyword_set(doc_type)
+    lower = compact.lower()
+    keyword_hits = sum(1 for kw in keywords if kw in lower)
+    has_digits = any(ch.isdigit() for ch in compact)
+    return keyword_hits >= 1 or has_digits
+
+
 def get_schema(doc_type):
-    if doc_type == "echallan":
-        return EChallan
-    elif doc_type == "lease":
+    if doc_type == "lease":
         return LeaseRecord
     elif doc_type == "na_order":
         return NAOrder
@@ -139,66 +193,12 @@ def _try_parse_json(text):
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        candidate = text[start:end + 1]
+        candidate = text[start : end + 1]
         try:
             return json.loads(candidate)
         except Exception:
             return None
     return None
-
-
-def _normalize_date_text(value):
-    if not value:
-        return None
-
-    value = str(value).strip()
-    m = re.search(r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})", value)
-    if not m:
-        return None
-
-    day = m.group(1).zfill(2)
-    month = m.group(2).zfill(2)
-    year = m.group(3)
-    if len(year) == 2:
-        year = "20" + year
-
-    return f"{day}/{month}/{year}"
-
-
-def _extract_best_date_from_text(text):
-    matches = re.findall(r"\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{2,4}\b", text)
-    for candidate in matches:
-        normalized = _normalize_date_text(candidate)
-        if normalized:
-            return normalized
-    return None
-
-
-def _normalize_plate_like(value):
-    if value is None:
-        return None
-    # Keep only alphanumeric characters and uppercase for stable identifiers.
-    return re.sub(r"[^A-Za-z0-9]", "", str(value)).upper() or None
-
-
-def _postprocess_echallan_data(data, source_text):
-    if not isinstance(data, dict):
-        return data
-
-    # Normalize compact identifiers.
-    data["vehicle_number"] = _normalize_plate_like(data.get("vehicle_number"))
-    data["challan_number"] = _normalize_plate_like(data.get("challan_number"))
-
-    # Normalize/repair violation date.
-    normalized = _normalize_date_text(data.get("violation_date"))
-    if normalized:
-        data["violation_date"] = normalized
-    elif not data.get("violation_date"):
-        fallback_date = _extract_best_date_from_text(source_text)
-        if fallback_date:
-            data["violation_date"] = fallback_date
-
-    return data
 
 
 def _postprocess_lease_data(data):
@@ -218,6 +218,9 @@ def _postprocess_na_order_data(data):
     if not isinstance(data, dict):
         return data
 
+    # Map na_area (the field name used in the prompt) to area_in_na_order.
+    if not data.get("area_in_na_order") and data.get("na_area"):
+        data["area_in_na_order"] = data.get("na_area")
     # Backward-compatible key mapping if model returns older field names.
     if not data.get("area_in_na_order") and data.get("land_area"):
         data["area_in_na_order"] = data.get("land_area")
@@ -230,15 +233,23 @@ def _postprocess_na_order_data(data):
 def extract_structured_data(text, doc_type):
     client = _get_client()
 
-    requested_budget = int(os.getenv("MAX_REQUEST_TOKENS", "3500"))
-    max_request_tokens = min(requested_budget, 12000)
-    reserve_output_tokens = int(os.getenv("RESERVE_OUTPUT_TOKENS", "1000"))
+    requested_budget = int(os.getenv("MAX_REQUEST_TOKENS", "1800"))
+    max_request_tokens = min(requested_budget, 4000)
+    reserve_output_tokens = int(os.getenv("RESERVE_OUTPUT_TOKENS", "350"))
+    max_completion_tokens = int(os.getenv("MAX_COMPLETION_TOKENS", "350"))
+
+    if not _has_min_signal(text, doc_type):
+        return None, "", ""
 
     # Estimate static prompt overhead with empty document and budget input accordingly.
     static_prompt = build_prompt("", doc_type)
     static_tokens = _approx_tokens(static_prompt)
-    max_input_tokens = max(1000, max_request_tokens - reserve_output_tokens - static_tokens)
-    max_input_chars_hard = int(os.getenv("MAX_INPUT_CHARS", "3000"))
+    max_input_tokens = max(
+        300, max_request_tokens - reserve_output_tokens - static_tokens
+    )
+    max_input_chars_hard = int(
+        os.getenv("MAX_INPUT_CHARS", str(_doc_char_budget(doc_type)))
+    )
     max_input_chars = min(max_input_tokens * 4, max_input_chars_hard)
 
     compacted_text = _compact_text_to_budget(text, doc_type, max_input_chars)
@@ -252,7 +263,8 @@ def extract_structured_data(text, doc_type):
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0
+        temperature=0,
+        max_tokens=max_completion_tokens,
     )
 
     raw_output = response.choices[0].message.content
@@ -268,9 +280,7 @@ def extract_structured_data(text, doc_type):
         if data is None:
             raise ValueError("Unable to parse JSON from model output")
 
-        if doc_type == "echallan":
-            data = _postprocess_echallan_data(data, compacted_text)
-        elif doc_type == "lease":
+        if doc_type == "lease":
             data = _postprocess_lease_data(data)
         elif doc_type == "na_order":
             data = _postprocess_na_order_data(data)
@@ -279,7 +289,7 @@ def extract_structured_data(text, doc_type):
         for k, v in data.items():
             if v is not None:
                 data[k] = str(v)
-        
+
         validated = schema(**data)
         return validated.dict(), prompt, raw_output
 
@@ -301,7 +311,8 @@ Output:
         fix_response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": fix_prompt}],
-            temperature=0
+            temperature=0,
+            max_tokens=max_completion_tokens,
         )
 
         fixed_output = fix_response.choices[0].message.content
@@ -312,9 +323,7 @@ Output:
             if data is None:
                 raise ValueError("Unable to parse fixed JSON")
 
-            if doc_type == "echallan":
-                data = _postprocess_echallan_data(data, compacted_text)
-            elif doc_type == "lease":
+            if doc_type == "lease":
                 data = _postprocess_lease_data(data)
             elif doc_type == "na_order":
                 data = _postprocess_na_order_data(data)

@@ -155,7 +155,7 @@ def process_single_pdf(pdf_path, save_debug=False):
 
     # Deterministic lease extraction: classify pages and extract key fields directly.
     if doc_type == "lease":
-        lease_record = extract_lease_record_from_pages(relevant_pages)
+        lease_record = extract_lease_record_from_pages(relevant_pages, all_pages=pages)
 
         # Fallback: extract doc_no and survey from filename when OCR fails.
         base_name = os.path.basename(pdf_path)

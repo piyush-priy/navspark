@@ -210,7 +210,7 @@ def _extract_lease_start(execution_date, term_text):
 	return execution_date
 
 
-def extract_lease_record_from_pages(pages):
+def extract_lease_record_from_pages(pages, all_pages=None):
 	classified = []
 	for p in pages:
 		text = p.get("text") or ""
@@ -254,11 +254,21 @@ def extract_lease_record_from_pages(pages):
 	lease_area = (annexure_areas or property_areas or any_areas or [None])[0]
 
 	execution_date = None
-	for page in page_groups["first_page"] + page_groups["registration"]:
-		dates = _all_dates(page["text"])
-		if dates:
-			execution_date = dates[0]
-			break
+	# The lease execution date appears as "Date: DD-MM-YYYY" in the footer
+	# of every page.  Search ALL raw pages (not just filtered) because the
+	# filtered subset may have garbled OCR on the footer.
+	search_pages = (all_pages or []) + [p for p in classified]
+	for page in search_pages:
+		text = page.get("text") or ""
+		m = re.search(
+			r"date\s*[:\-]\s*(\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{2,4})",
+			text,
+			flags=re.IGNORECASE,
+		)
+		if m:
+			execution_date = _normalize_date(m.group(1))
+			if execution_date:
+				break
 
 	term_blob = "\n".join(page["text"] for page in page_groups["term"])
 	lease_start = _extract_lease_start(execution_date, term_blob)

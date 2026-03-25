@@ -136,11 +136,11 @@ python main.py
 
 ### PDF File Naming Convention and Structure Assumption
 
-> [!IMPORTANT]
+**[!IMPORTANT]**
 
-> Each PDF **must** follow similar structure and format for NA Order and Lease Deed.
+- Each PDF **must** follow similar structure and format for NA Order and Lease Deed.
 
-> Each PDF file **must** follow the exact naming scheme shown below. The pipeline relies on filename patterns to extract survey numbers and document numbers as a fallback when OCR is unreliable. Incorrectly named files may produce incomplete or missing records.
+- Each PDF file **must** follow the exact naming scheme shown below. The pipeline relies on filename patterns to extract survey numbers and document numbers as a fallback when OCR is unreliable. Incorrectly named files may produce incomplete or missing records.
 
 **Lease Deeds** — format: `<Village> S.No.- <SurveyNo> Lease Deed No.- <DocNo>.pdf`
 

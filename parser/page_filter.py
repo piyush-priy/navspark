@@ -356,7 +356,7 @@ def filter_pages(pages, doc_type):
     if doc_type == "na_order":
         target_pages = {1}
     elif doc_type == "lease":
-        target_pages = {1, 3, 4, 10, 35, 51}
+        target_pages = {3, 4, 33, 35, 51}
     else:
         target_pages = None
 
@@ -391,7 +391,7 @@ def filter_pages(pages, doc_type):
     if not relevant and pages:
         if doc_type == "lease":
             # Prefer fixed lease pages fallback as requested.
-            lease_fallback = [p for p in pages if p["page"] in {1, 3, 4, 10, 35, 51}]
+            lease_fallback = [p for p in pages if p["page"] in {3, 4, 33, 35, 51}]
             if lease_fallback:
                 first = lease_fallback[0]
             else:

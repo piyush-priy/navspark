@@ -49,7 +49,7 @@ PDF files (data/)
 ## Project Structure
 
 ```
-navspark/
+The-Compliance-Clerk/
 ├── main.py                       # Entry point — orchestrates the full pipeline
 ├── parser/
 │   ├── pdf_parser.py             # PDF-to-text via pdfplumber; OCR fallback via
@@ -134,9 +134,12 @@ python main.py
 
 3. Results appear in `output/results.xlsx` and `output/results.json`.
 
-### PDF File Naming Convention
+### PDF File Naming Convention and Structure Assumption
 
 > [!IMPORTANT]
+
+> Each PDF **must** follow similar structure and format for NA Order and Lease Deed.
+
 > Each PDF file **must** follow the exact naming scheme shown below. The pipeline relies on filename patterns to extract survey numbers and document numbers as a fallback when OCR is unreliable. Incorrectly named files may produce incomplete or missing records.
 
 **Lease Deeds** — format: `<Village> S.No.- <SurveyNo> Lease Deed No.- <DocNo>.pdf`

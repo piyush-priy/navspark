@@ -89,7 +89,7 @@ def _target_pages_for_doc_type(doc_type):
     if doc_type == "na_order":
         return [1]
     if doc_type == "lease":
-        return [4, 10, 35, 51]
+        return [3, 4, 33, 35, 51] 
     return None
 
 

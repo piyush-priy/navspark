@@ -1,4 +1,4 @@
-# NavSpark — Document Extraction Pipeline
+# The Compliance Clerk — Document Extraction Pipeline
 
 A hybrid document extraction pipeline for processing legally dense, mixed-language (English + Gujarati) government documents — specifically **Non-Agricultural (NA) Orders** and **Lease Deeds**. The system extracts structured data from scanned PDFs, merges records by survey number, and exports a unified Excel spreadsheet.
 
